@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent
 st.set_page_config(page_title="MathAgents | Mathematics, made clearer", page_icon="∑", layout="wide")
 st.markdown("""<style>
 .stApp {background:#f5f7fb;color:#142139}
-.block-container {max-width:1280px;padding-top:2rem;padding-bottom:3rem}
+.block-container {max-width:1280px;padding-top:4.5rem;padding-bottom:3rem}
 h1,h2,h3 {letter-spacing:-.04em;color:#132440}
 h1 {font-size:3.5rem!important;line-height:1.07!important;font-weight:750!important}
 [data-testid="stSidebar"] {background:#10233f;color:#e7efff}
@@ -29,7 +29,7 @@ h1 {font-size:3.5rem!important;line-height:1.07!important;font-weight:750!import
 .intro {font-size:1.15rem;color:#51647b;max-width:680px;margin-bottom:2rem}
 .brand {font-size:1.7rem;font-weight:750;letter-spacing:-.05em;margin-bottom:.2rem}
 .subtle {color:#afc5df;font-size:.9rem}
-@media(max-width:700px){h1{font-size:2.5rem!important}.block-container{padding-top:1rem}}
+@media(max-width:700px){h1{font-size:2.5rem!important}.block-container{padding-top:4rem}}
 </style>""", unsafe_allow_html=True)
 
 
