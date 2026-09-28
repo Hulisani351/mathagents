@@ -1,6 +1,5 @@
 """MathAgents: a useful mathematics workspace and transparent research companion."""
 from pathlib import Path
-import hmac
 import json
 import os
 import time
@@ -102,15 +101,11 @@ if page == "Solve":
             if col.button(name, use_container_width=True):
                 st.session_state.question = question
         api_key = setting("ZAI_API_KEY")
-        password = setting("APP_ACCESS_PASSWORD")
-        authorized = False
-        if api_key and password:
-            entered = st.text_input("Presentation access code", type="password", help="The app owner shares this code with approved testers.")
-            authorized = hmac.compare_digest(entered, password)
-        elif api_key and setting("ALLOW_PUBLIC_USAGE", "false").lower() == "true":
-            authorized = True
+        authorized = bool(api_key)
+        if authorized:
+            st.caption("No access code needed. Your question is sent only when you submit.")
         else:
-            st.info("The interface is ready. The app owner needs to enable the secure solver in Streamlit settings.")
+            st.info("The interface is ready. The app owner needs to configure the AI provider in Streamlit settings.")
         with st.form("solve_form"):
             problem = st.text_area("Mathematics question", key="question", height=190, max_chars=4000,
                                    placeholder="Type an equation or paste a word problem…")
