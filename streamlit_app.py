@@ -132,7 +132,6 @@ if page == "Solve":
     st.markdown('<div class="eyebrow">MATHAGENTS / YOUR THINKING SPACE</div>', unsafe_allow_html=True)
     st.title("Work through your mathematics")
     st.markdown('<div class="intro">A focused solver or a fresh second perspective. Bring your maths, explore the steps, and build your understanding.</div>', unsafe_allow_html=True)
-    st.info("Presenting? Open Presentation (saved) for real recorded examples that do not depend on the AI provider. Live solving is subject to provider availability.")
     st.markdown('<div class="journey"><span>01 &nbsp; Choose an approach</span><span>02 &nbsp; Ask your question</span><span>03 &nbsp; Explore the solution</span></div>', unsafe_allow_html=True)
     left, right = st.columns([1, 1.05], gap="large")
     with left:
