@@ -33,7 +33,7 @@ def setting(key, default=""):
 
 
 @st.cache_resource
-def request_gate():
+def provider_request_gate_v2():
     return RequestGate(daily_limit=300)
 
 
@@ -157,7 +157,7 @@ if page == "Solve":
             st.caption("No access code needed. Your question is sent only when you submit.")
         else:
             st.info("The interface is ready. The app owner needs to configure the AI provider in Streamlit settings.")
-        remaining = request_gate().remaining()
+        remaining = provider_request_gate_v2().remaining()
         if remaining:
             st.warning(f"Provider cooldown: about {remaining} seconds remaining when this page loaded. Avoid repeated submissions; use Presentation (saved) meanwhile.")
             st.button("Refresh provider status", help="Refresh this display without sending an AI request.")
@@ -178,7 +178,7 @@ if page == "Solve":
                 try:
                     with st.status("Working on your question…", expanded=True) as status:
                         st.write("Requests are queued one at a time to reduce provider limits. Temporary failures receive up to three attempts; long cooldowns stop safely. This can take several minutes. Successful stages are reused on retry.")
-                        result = solve_question(problem, mode, CloudClient(api_key, setting("ZAI_MODEL", "glm-4.7-flash"), gate=request_gate(), response_cache=st.session_state.response_cache))
+                        result = solve_question(problem, mode, CloudClient(api_key, setting("ZAI_MODEL", "glm-4.7-flash"), gate=provider_request_gate_v2(), response_cache=st.session_state.response_cache))
                         st.session_state.answer = result
                         st.session_state.history = [result, *st.session_state.history][:20]
                         status.update(label="Solution ready", state="complete", expanded=False)

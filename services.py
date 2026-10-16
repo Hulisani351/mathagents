@@ -1,6 +1,4 @@
 """Cloud-safe solver boundary. No silent fallback and no secrets in result exports."""
-from __future__ import annotations
-
 import json
 import hashlib
 import math
