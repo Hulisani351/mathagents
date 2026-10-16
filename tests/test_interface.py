@@ -11,6 +11,31 @@ APP = Path(__file__).resolve().parents[1] / "streamlit_app.py"
 
 
 class InterfaceTests(unittest.TestCase):
+    def test_recorded_presentation_needs_no_provider(self):
+        app = self.start()
+        with patch('services.CloudClient.generate', side_effect=AssertionError('Unexpected provider request')):
+            app.sidebar.radio[0].set_value('Presentation (saved)').run()
+            self.assertEqual(len(app.exception), 0)
+            self.assertTrue(any('not a live generation' in x.value for x in app.warning))
+            self.assertTrue(any('32' == x.value for x in app.markdown))
+            app.selectbox[0].set_value(1).run()
+            self.assertEqual(len(app.exception), 0)
+            self.assertTrue(any('26' == x.value for x in app.markdown))
+            self.assertTrue(any('27' in x.value for x in app.caption))
+
+    def test_live_failure_preserves_previous_answer_and_updates_status(self):
+        app = self.start()
+        app.session_state['answer'] = solve_question('2x+3=11', 'single', FakeClient())
+        with patch.dict('os.environ', {'ZAI_API_KEY': 'test-key'}), patch('services.CloudClient.generate', side_effect=__import__('services').SolverError('Provider cooling down')):
+            app.run()
+            app.text_area[0].set_value('2+2')
+            app.checkbox[0].check()
+            next(b for b in app.button if b.label == 'Solve my question').click().run()
+        self.assertEqual(len(app.exception), 0)
+        self.assertTrue(any('Provider cooling down' in x.value for x in app.error))
+        self.assertEqual(app.session_state['answer']['final_answer'], '4')
+        self.assertEqual(app.status[0].state, 'error')
+
     def test_uj_branding_and_student_identity(self):
         app = self.start()
         self.assertTrue(any('University of Johannesburg logo' in item.value for item in app.markdown))

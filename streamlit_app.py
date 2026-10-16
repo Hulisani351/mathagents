@@ -52,6 +52,12 @@ def solution_text(result):
     lines = ["MathAgents • Solution", "", result["problem"], "",
              "FINAL ANSWER", result["final_answer"], "",
              f"{result['mode']} | {result['model']} | {result['elapsed_seconds']:.1f} seconds"]
+    lines.extend(["Source: " + result.get("execution_source", "live_provider"),
+                  "Recorded at: " + result.get("created_at", "unknown")])
+    if result.get("reused_stages"):
+        lines.append("Reused saved stages: " + json.dumps(result['reused_stages']))
+    if result.get("execution_source") == "saved_benchmark":
+        lines.append("RECORDED BENCHMARK REPLAY — not live generation.")
     for event in result["trace"]:
         if "prompt" not in event["stage"] and "mapping" not in event["stage"]:
             lines.extend(["", event["stage"].replace("_", " ").title(), event["payload"].get("text", "")])
@@ -59,14 +65,14 @@ def solution_text(result):
     return "\n".join(lines)
 
 
-for key, default in {"history": [], "answer": None, "question": "", "last_request": 0.0, "feedback": []}.items():
+for key, default in {"history": [], "answer": None, "question": "", "last_request": 0.0, "feedback": [], "response_cache": {}}.items():
     if key not in st.session_state:
         st.session_state[key] = default
 
 with st.sidebar:
     st.markdown('<div class="sidebar-kicker">UJ · STUDENT RESEARCH</div><div class="brand">∑ MathAgents</div><div class="subtle">Your mathematics workspace</div>', unsafe_allow_html=True)
     st.divider()
-    page = st.radio("Workspace", ["Solve", "Compare", "My session", "Research", "Feedback", "About"], key="workspace_page", label_visibility="collapsed")
+    page = st.radio("Workspace", ["Solve", "Presentation (saved)", "Compare", "My session", "Research", "Feedback", "About"], key="workspace_page", label_visibility="collapsed")
     st.divider()
     st.markdown("**YOUR SPACE**")
     st.caption(f"{len(st.session_state.history)} saved solution{'s' if len(st.session_state.history) != 1 else ''} this session")
@@ -79,6 +85,11 @@ with st.sidebar:
 def show_result(result, key="current"):
     st.markdown('<div class="eyebrow">Your solution workspace</div>', unsafe_allow_html=True)
     st.subheader("Answer and explanation")
+    if result.get("execution_source") == "saved_benchmark":
+        st.warning("RECORDED BENCHMARK REPLAY — not a live generation. No provider request is sent.")
+        st.caption(f"Saved {result['created_at']} · Question ID: {result['question_id']}")
+    elif result.get("reused_stages"):
+        st.info(f"Reused {len(result['reused_stages'])} successful model stage(s) from this browser session. This is a cached/resumed result, not an entirely fresh generation.")
     with st.expander("Question answered", expanded=True):
         st.write(result["problem"])
     with st.container(border=True):
@@ -86,8 +97,10 @@ def show_result(result, key="current"):
         st.markdown(result["final_answer"])
         a, b = st.columns(2)
         a.metric("Approach", "Single agent" if result["mode"] == "single" else "Multi-agent team")
-        b.metric("Time taken", f"{result['elapsed_seconds']:.1f} s")
+        b.metric("Recorded runtime" if result.get("execution_source") == "saved_benchmark" else "This attempt", f"{result['elapsed_seconds']:.1f} s")
         st.caption(f"Model: {result['model']} · AI-generated, not independently certified")
+        if result.get("runtime_scope"):
+            st.caption(result["runtime_scope"])
         if result.get("verdict") == "CONSENSUS":
             st.info("Both independent solvers agree. A third model call was unnecessary. Agreement does not guarantee correctness.")
         elif result["mode"] == "multi":
@@ -119,6 +132,7 @@ if page == "Solve":
     st.markdown('<div class="eyebrow">MATHAGENTS / YOUR THINKING SPACE</div>', unsafe_allow_html=True)
     st.title("Work through your mathematics")
     st.markdown('<div class="intro">A focused solver or a fresh second perspective. Bring your maths, explore the steps, and build your understanding.</div>', unsafe_allow_html=True)
+    st.info("Presenting? Open Presentation (saved) for real recorded examples that do not depend on the AI provider. Live solving is subject to provider availability.")
     st.markdown('<div class="journey"><span>01 &nbsp; Choose an approach</span><span>02 &nbsp; Ask your question</span><span>03 &nbsp; Explore the solution</span></div>', unsafe_allow_html=True)
     left, right = st.columns([1, 1.05], gap="large")
     with left:
@@ -143,6 +157,10 @@ if page == "Solve":
             st.caption("No access code needed. Your question is sent only when you submit.")
         else:
             st.info("The interface is ready. The app owner needs to configure the AI provider in Streamlit settings.")
+        remaining = request_gate().remaining()
+        if remaining:
+            st.warning(f"Provider cooldown: about {remaining} seconds remaining when this page loaded. Avoid repeated submissions; use Presentation (saved) meanwhile.")
+            st.button("Refresh provider status", help="Refresh this display without sending an AI request.")
         with st.form("solve_form"):
             problem = st.text_area("Mathematics question", key="question", height=190, max_chars=4000,
                                    placeholder="Type an equation or paste a word problem…")
@@ -157,17 +175,19 @@ if page == "Solve":
                 st.warning("Please allow ten seconds between requests.")
             else:
                 st.session_state.last_request = time.monotonic()
-                st.session_state.answer = None
                 try:
                     with st.status("Working on your question…", expanded=True) as status:
-                        st.write("Running the selected workflow. Provider cooldowns may add a short delay.")
-                        result = solve_question(problem, mode, CloudClient(api_key, setting("ZAI_MODEL", "glm-4.7-flash"), gate=request_gate()))
+                        st.write("Requests are queued one at a time to reduce provider limits. Temporary failures receive up to three attempts; long cooldowns stop safely. This can take several minutes. Successful stages are reused on retry.")
+                        result = solve_question(problem, mode, CloudClient(api_key, setting("ZAI_MODEL", "glm-4.7-flash"), gate=request_gate(), response_cache=st.session_state.response_cache))
                         st.session_state.answer = result
                         st.session_state.history = [result, *st.session_state.history][:20]
                         status.update(label="Solution ready", state="complete", expanded=False)
                 except SolverError as exc:
+                    status.update(label="Live provider unavailable — saved presentation is available", state="error", expanded=False)
                     st.error(str(exc))
+                    st.info("Your question and any previous answer are preserved. Open Presentation (saved) in the sidebar to continue your demonstration without the provider.")
                 except Exception:
+                    status.update(label="Live request could not finish", state="error", expanded=False)
                     st.error("The solver could not complete this question. No fallback answer has been substituted. Please try again.")
     with right:
         if st.session_state.answer:
@@ -178,6 +198,19 @@ if page == "Solve":
                 st.markdown("**A good question goes a long way**")
                 st.write("Include the full problem, any constraints, and what you want to find. Ask for a substitution check or a proof where useful.")
                 st.caption("Real model calls only. We never substitute a demonstration answer when a request fails.")
+
+elif page == "Presentation (saved)":
+    st.title("Presentation: recorded model examples")
+    st.info("These are genuine saved Omni-MATH-Rule outputs, selected to show both a correction and a harmful change. They are not live responses and are not a representative sample. This page makes zero AI-provider calls; the website itself still needs internet access.")
+    examples = json.loads((ROOT / "research" / "presentation_examples.json").read_text(encoding="utf-8"))
+    selected = st.selectbox("Recorded example", range(len(examples)), format_func=lambda i: examples[i]["title"])
+    example = examples[selected]
+    st.markdown("### " + example["title"])
+    st.write(example["explanation"])
+    st.caption("Reference answer: " + example["reference_answer"])
+    show_result(example["result"], "presentation_" + str(selected))
+    st.download_button("Download recorded examples for backup", json.dumps(examples, indent=2, ensure_ascii=False), "mathagents-recorded-examples.json", "application/json")
+    st.caption("For a live demonstration, return to Solve. Replays are never silently substituted for a failed live request.")
 
 elif page == "Compare":
     st.title("Compare your solutions")
@@ -207,6 +240,7 @@ elif page == "My session":
     if st.button("Clear my session history", disabled=not confirm_clear):
         st.session_state.history = []
         st.session_state.answer = None
+        st.session_state.response_cache = {}
     if not st.session_state.history:
         st.info("Solve your first question to start your notebook.")
     search = st.text_input("Search saved questions or answers", placeholder="For example: probability, 2x, or 4")
